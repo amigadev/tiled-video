@@ -1,0 +1,6 @@
+images/
+converter
+player
+anim.bin*
+*.o
+*.swp

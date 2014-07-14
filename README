@@ -1,0 +1,1 @@
+Simple test to convert a series of 1-bit images (black/white) into a video and optimizing the tiles used when decoding.
