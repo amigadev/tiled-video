@@ -215,7 +215,6 @@ uint8_t* stream_alloc(uint32_t len)
 	return result;
 }
 
-
 int main(int argc, char* argv[])
 {
 	int ret = 1;
@@ -327,7 +326,7 @@ int main(int argc, char* argv[])
 
 							tile_index_t tile_index = TILE_NO_TILE;
 
-							const unsigned int thres = 24;
+							const unsigned int thres = 16;
 							unsigned int max_diff = thres * thres;
 
 
@@ -408,6 +407,88 @@ int main(int argc, char* argv[])
 				SDL_RenderPresent(rdr);
 			}
 		}
+
+		{
+			frame_t prev_frame = { 0 };
+
+			for (unsigned int i = 0; i < frame_offset; ++i)
+			{
+				raw_frame_t* curr_raw_frame = &frames[i];
+				frame_t curr_frame;
+
+				for (unsigned int j = 0; j < (SCREEN_WIDTH / TILE_WIDTH) * (SCREEN_HEIGHT / TILE_HEIGHT); ++j)
+				{
+					curr_frame.tiles[j] = (curr_raw_frame->tiles[j] & ~ (TILE_BITS_MASK << TILE_BITS_SHIFT)) | ((curr_raw_frame->tiles[j] & (TILE_BITS_MASK << TILE_BITS_SHIFT)) >> TILE_BITS_SHIFT);
+				}
+
+				tile_index_t* curr = curr_frame.tiles;
+				tile_index_t* prev = prev_frame.tiles;
+
+				tile_index_t* first = NULL;
+				int skipping = 0;
+
+				for (unsigned int j = 0, n = (SCREEN_WIDTH / TILE_WIDTH) * (SCREEN_HEIGHT / TILE_HEIGHT); j < n; ++j, ++curr, ++prev)
+				{
+
+					if (first && (curr - first) == 127)
+					{
+						if (skipping)
+						{
+							uint8_t* s = stream_alloc(1);
+							*s = (uint8_t)(curr-first);
+						}
+						else
+						{
+							uint8_t* s = stream_alloc(1 + (curr-first) * sizeof(tile_index_t));
+							*s = ((uint8_t)(curr-first))|0x80;
+							memcpy(s+1, first, (curr-first) * sizeof(tile_index_t));
+						}
+						first = NULL; skipping = 0;
+					}
+
+					if (!first)
+					{
+						first = curr;
+						skipping = (*curr == *prev) ? 1 : 0;
+					}
+					else
+					{
+						if (skipping && (*curr != *prev))
+						{
+							uint8_t* s = stream_alloc(1);
+							*s = (uint8_t)(curr-first); 
+
+							first = curr; skipping = 0;
+						}
+						else if (!skipping && (*curr == *prev))
+						{
+							uint8_t* s = stream_alloc(1 + (curr-first) * sizeof(tile_index_t));
+							*s = ((uint8_t)(curr-first))|0x80;
+							memcpy(s+1, first, (curr-first) * sizeof(tile_index_t));
+
+							first = curr; skipping = 1;
+						}
+					}
+				}
+
+				if (first)
+				{
+					if (skipping)
+					{
+						uint8_t* s = stream_alloc(1);
+						*s = (uint8_t)(curr-first);
+					}
+					else
+					{
+						uint8_t* s = stream_alloc(1 + (curr-first) * sizeof(tile_index_t));
+						*s = ((uint8_t)(curr-first))|0x80;
+						memcpy(s+1, first, (curr-first) * sizeof(tile_index_t));
+					}
+				}
+
+				prev_frame = curr_frame;
+			}
+		}
 	}
 	while (0);
 
@@ -435,20 +516,10 @@ int main(int argc, char* argv[])
 		fwrite(tiles, sizeof(tile_t), tile_offset, stdout);
 
 		fwrite(&frame_offset, sizeof(frame_offset), 1, stdout);
-		for (unsigned int i = 0; i < frame_offset; ++i)
-		{
-			raw_frame_t* in_frame = &frames[i];
-			frame_t out_frame;
+		fwrite(&stream_offset, sizeof(stream_offset), 1, stdout);
+		fwrite(stream, 1, stream_offset, stdout);
 
-			for (unsigned int j = 0; j < (SCREEN_WIDTH / TILE_WIDTH) * (SCREEN_HEIGHT / TILE_HEIGHT); ++j)
-			{
-				out_frame.tiles[j] = (in_frame->tiles[j] & ~ (TILE_BITS_MASK << TILE_BITS_SHIFT)) | ((in_frame->tiles[j] & (TILE_BITS_MASK << TILE_BITS_SHIFT)) >> TILE_BITS_SHIFT);
-			}
-
-			fwrite(&out_frame, sizeof(frame_t), 1, stdout);
-		}
-
-		fprintf(stderr, "%u tiles (%lu bytes), %u frames, (%lu bytes)\n", tile_offset, tile_offset * sizeof(tile_t), frame_offset, frame_offset * sizeof(frame_t));
+		fprintf(stderr, "%u tiles (%lu bytes), %u frames, (%lu bytes), %u stream bytes\n", tile_offset, tile_offset * sizeof(tile_t), frame_offset, frame_offset * sizeof(frame_t), stream_offset);
 	}
 
 	return ret;

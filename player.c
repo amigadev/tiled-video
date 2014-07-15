@@ -50,18 +50,22 @@ int main(int argc, char* argv[])
 		tile_t* tiles = malloc(tile_count * sizeof(tile_t));
 		fread(tiles, sizeof(tile_t), tile_count, stdin);
 
-		uint32_t frame_count = 0;
+		uint32_t frame_count = 0, stream_count = 0;
 		fread(&frame_count, sizeof(frame_count), 1, stdin);
+		fread(&stream_count, sizeof(stream_count), 1, stdin);
 
-		frame_t* frames = malloc(frame_count * sizeof(frame_t));
-		fread(frames, sizeof(frame_t), frame_count, stdin);
+		uint8_t* stream = malloc(stream_count);
+		fread(stream, 1, stream_count, stdin);
 
-		fprintf(stderr, "%u tiles, %u frames\n", tile_count, frame_count);
+		fprintf(stderr, "%u tiles, %u frames, %u stream bytes\n", tile_count, frame_count, stream_count);
 
-		frame_t prev_frame = { 0xff };
+		frame_t prev_frame = { 0 }, curr_frame = { 0 };
 
 		SDL_Texture* textures[4] = { 0 };
-		int alpha[4] = { 32, 64, 128, 255 };
+		int alpha[4] = { 16, 32, 64, 255 };
+
+		uint8_t* stream_begin = stream;
+		uint8_t* stream_end = stream + stream_count;
 
 		int quit = 0;
 		for (int frame_index = 0; !quit && (frame_index < frame_count); ++frame_index)
@@ -77,10 +81,29 @@ int main(int argc, char* argv[])
 
 			SDL_RenderClear(rdr);
 
+			for (unsigned int i = 0, n = (SCREEN_WIDTH / TILE_WIDTH) * (SCREEN_HEIGHT / TILE_HEIGHT); i < n;)
+			{
+				if (i > n)
+				{
+					fprintf(stderr, "BUFFER OVERRUN\n");
+					break;
+				}
+
+				uint8_t length = *stream_begin;
+				uint8_t dlen = length & 0x7f;
+				if (length & 0x80)
+				{
+					memcpy(&curr_frame.tiles[i], stream_begin + 1, dlen * sizeof(tile_index_t));
+					stream_begin += (dlen * sizeof(tile_index_t));	
+				}
+
+				++ stream_begin;
+				i += dlen;
+			}
+
 			SDL_LockSurface(work);
 			{
-				frame_t* curr_frame = &frames[frame_index];
-				tile_index_t* curr_tile_index = curr_frame->tiles;
+				tile_index_t* curr_tile_index = curr_frame.tiles;
 
 				for (unsigned int y = 0; y < work->h; y += TILE_HEIGHT)
 				{
@@ -173,7 +196,7 @@ int main(int argc, char* argv[])
 					}
 				}
 
-				prev_frame = *curr_frame;
+				prev_frame = curr_frame;
 			}
 			SDL_UnlockSurface(work);
 
