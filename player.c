@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <unistd.h>
 
 #include "video.h"
 
@@ -12,6 +13,12 @@ int main(int argc, char* argv[])
 
 	do
 	{
+		if (isatty(fileno(stdin)))
+		{
+			fprintf(stderr, "No file specified as piped input\n");
+			break;
+		}
+
 		if (SDL_Init(SDL_INIT_EVERYTHING))
 		{
 			fprintf(stderr, "Could not initialize SDL\n");
@@ -81,29 +88,88 @@ int main(int argc, char* argv[])
 					{
 						uint8_t* pixels = ((uint8_t*)work->pixels) + x * 4 + y * work->pitch;
 						tile_index_t tindex = *curr_tile_index++;
-						tile_t* curr_tile = &tiles[tindex & ~TILE_FLIP_X];
+						tile_t* curr_tile = &tiles[tindex & ~TILE_BITS_MASK];
 
-						for (unsigned int ty = 0; ty < TILE_HEIGHT; ++ty)
+						switch (tindex & TILE_BITS_MASK)
 						{
-							uint8_t* pixel = pixels;
+							case 0:
+							{ 
+								for (unsigned int ty = 0; ty < TILE_HEIGHT; ++ty)
+								{
+									uint8_t* pixel = pixels;
+									uint8_t* row = &curr_tile->data[ty * (TILE_WIDTH / 8)];
 
-							for (unsigned int tx = 0; tx < TILE_WIDTH; ++tx)
-							{
-								uint8_t result;
-								if (tindex & TILE_FLIP_X)
-								{
-									result = curr_tile->data[((tx ^ 15) / 8) + ty * (TILE_WIDTH / 8)] & (1 << (tx & 7)) ? 0xff : 0x00; 
+									for (unsigned int tx = 0; tx < TILE_WIDTH; ++tx)
+									{
+										uint8_t result = row[tx / 8] & (1 << ((tx & 7) ^ 7)) ? 0xff : 0x00;
+										pixel[0] = pixel[1] = pixel[2] = pixel[3] = result;
+										pixel += 4;
+									}
+
+									pixels += work->pitch;
 								}
-								else
-								{
-									result = curr_tile->data[(tx / 8) + ty * (TILE_WIDTH / 8)] & (1 << ((tx & 7) ^ 7)) ? 0xff : 0x00;
-								}
-								pixel[0] = pixel[1] = pixel[2] = pixel[3] = result;
-								pixel += 4;
 							}
+							break;
 
-							pixels += work->pitch;
+							case TILE_FLIP_X:
+							{ 
+								for (unsigned int ty = 0; ty < TILE_HEIGHT; ++ty)
+								{
+									uint8_t* pixel = pixels;
+									uint8_t* row = &curr_tile->data[ty * (TILE_WIDTH / 8)];
+
+									for (unsigned int tx = 0; tx < TILE_WIDTH; ++tx)
+									{
+										uint8_t result = row[((tx ^ 15) / 8)] & (1 << (tx & 7)) ? 0xff : 0x00; 
+										pixel[0] = pixel[1] = pixel[2] = pixel[3] = result;
+										pixel += 4;
+									}
+
+									pixels += work->pitch;
+								}
+							}
+							break;
+
+							case TILE_FLIP_Y:
+							{
+								for (unsigned int ty = 0; ty < TILE_HEIGHT; ++ty)
+								{
+									uint8_t* pixel = pixels;
+									uint8_t* row = &curr_tile->data[((TILE_HEIGHT-1)-ty) * (TILE_WIDTH / 8)];
+
+									for (unsigned int tx = 0; tx < TILE_WIDTH; ++tx)
+									{
+										uint8_t result = row[tx / 8] & (1 << ((tx & 7) ^ 7)) ? 0xff : 0x00;
+										pixel[0] = pixel[1] = pixel[2] = pixel[3] = result;
+										pixel += 4;
+									}
+
+									pixels += work->pitch;
+								}
+							}
+							break;
+
+							case TILE_FLIP_X|TILE_FLIP_Y:
+							{
+								for (unsigned int ty = 0; ty < TILE_HEIGHT; ++ty)
+								{
+									uint8_t* pixel = pixels;
+									uint8_t* row = &curr_tile->data[((TILE_HEIGHT-1)-ty) * (TILE_WIDTH / 8)];
+
+									for (unsigned int tx = 0; tx < TILE_WIDTH; ++tx)
+									{
+										uint8_t result = row[((tx ^ 15) / 8)] & (1 << (tx & 7)) ? 0xff : 0x00; 
+										pixel[0] = pixel[1] = pixel[2] = pixel[3] = result;
+										pixel += 4;
+									}
+
+									pixels += work->pitch;
+								}
+							}
+							break;
+
 						}
+
 					}
 				}
 
