@@ -4,6 +4,8 @@
 
 #include "video.h"
 
+//#define DEBUG_RENDER
+
 SDL_Surface* load_image(const char* filename)
 {
 	SDL_Surface* result = NULL;
@@ -223,7 +225,11 @@ int main(int argc, char* argv[])
 
 	do
 	{
+#if defined(DEBUG_RENDER)
 		if (SDL_Init(SDL_INIT_EVERYTHING))
+#else
+		if (SDL_Init(SDL_INIT_EVENTS))
+#endif
 		{
 			fprintf(stderr, "Could not initialize SDL\n");
 			break;
@@ -235,6 +241,7 @@ int main(int argc, char* argv[])
 			break;
 		}
 
+#if defined(DEBUG_RENDER)
 		if (!(win = SDL_CreateWindow("Converter", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0)))
 		{
 			fprintf(stderr, "Could not create window\n");
@@ -246,7 +253,7 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "Could not create renderer\n");
 			break;
 		}
-
+#endif
 		ret = 0;
 
 		const int first_frame = 1;
@@ -274,7 +281,10 @@ int main(int argc, char* argv[])
 				}
 			}
 
-			SDL_RenderClear(rdr);
+			if (rdr)
+			{
+				SDL_RenderClear(rdr);
+			}
 
 			char path[256];
 			sprintf(path, "./images/image_%05d.png", frame_index);
@@ -366,20 +376,23 @@ int main(int argc, char* argv[])
 				}
 				SDL_UnlockSurface(image);
 
-				do
+				if (rdr)
 				{
-					if (!(tex = SDL_CreateTextureFromSurface(rdr, image)))
+					do
 					{
-						fprintf(stderr, "Could not create texture\n");
-						break;
+						if (!(tex = SDL_CreateTextureFromSurface(rdr, image)))
+						{
+							fprintf(stderr, "Could not create texture\n");
+							break;
+						}
+
+						SDL_RenderCopy(rdr, tex, NULL, NULL);
 					}
+					while (0);
 
-					SDL_RenderCopy(rdr, tex, NULL, NULL);
+					SDL_DestroyTexture(tex);
+					SDL_FreeSurface(image);
 				}
-				while (0);
-
-				SDL_DestroyTexture(tex);
-				SDL_FreeSurface(image);
 			}
 
 			prev_frame = curr_frame;
@@ -389,7 +402,11 @@ int main(int argc, char* argv[])
 
 			fprintf(stderr, "frame %u: %u tiles (%lu bytes)\n", frame_index, tile_offset, tile_offset * sizeof(tile_t));
 			fprintf(stderr, "   %u tiles saved (%lu bytes)\n", tile_collisions, tile_collisions * sizeof(tile_t));
-			SDL_RenderPresent(rdr);
+
+			if (rdr)
+			{
+				SDL_RenderPresent(rdr);
+			}
 		}
 	}
 	while (0);
