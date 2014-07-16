@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
 		ret = 0;
 
 		const int first_frame = 1;
-		const int last_frame = 5600;
+		const int last_frame = 6572;
 
 		raw_frame_t prev_frame = { 0 };
 
