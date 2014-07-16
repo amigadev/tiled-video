@@ -27,7 +27,7 @@ SDL_Surface* load_image(const char* filename)
 			break;
 		}
 
-		SDL_Rect rect = { 0, 0, 640, 400 };
+		SDL_Rect rect = { 0, 0, 1440, 1080 };
 
 		SDL_BlitScaled(temp, &rect, result, NULL);
 	}
