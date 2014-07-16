@@ -5,6 +5,8 @@
 #include "video.h"
 
 //#define DEBUG_RENDER
+#define WHITE_FILTER 2
+#define FILTER_THRESHOLD 36
 
 SDL_Surface* load_image(const char* filename)
 {
@@ -61,6 +63,13 @@ tile_t* tile_alloc()
 	return &tiles[tile_offset++];
 }
 
+uint8_t count_bits(uint8_t x)
+{
+	x = (x & 0x55) + ((x >> 1) & 0x55);
+	x = (x & 0x33) + ((x >> 2) & 0x33);
+	return (x & 0x0f) + ((x >> 4) & 0x0f);
+}
+
 uint32_t tile_compare(tile_t* a, tile_t* b, uint32_t mode)
 {
 	uint8_t* ta = a->data;
@@ -83,9 +92,7 @@ uint32_t tile_compare(tile_t* a, tile_t* b, uint32_t mode)
 					uint8_t db = *tb_row++;
 
 					uint8_t x = da ^ db;
-					x = (x & 0x55) + ((x >> 1) & 0x55);
-					x = (x & 0x33) + ((x >> 2) & 0x33);
-					value += (x & 0x0f) + ((x >> 4) & 0x0f);
+					value += count_bits(x) + WHITE_FILTER * count_bits(db & x);
 				}
 
 				ta += (TILE_WIDTH / 8);
@@ -111,9 +118,7 @@ uint32_t tile_compare(tile_t* a, tile_t* b, uint32_t mode)
 					db = ((db & 0x0f) << 4) | ((db & 0xf0) >> 4);
 
 					uint8_t x = da ^ db;
-					x = (x & 0x55) + ((x >> 1) & 0x55);
-					x = (x & 0x33) + ((x >> 2) & 0x33);
-					value += (x & 0x0f) + ((x >> 4) & 0x0f);
+					value += count_bits(x) + WHITE_FILTER * count_bits(db & x);
 				}
 
 				ta += (TILE_WIDTH / 8);
@@ -137,9 +142,7 @@ uint32_t tile_compare(tile_t* a, tile_t* b, uint32_t mode)
 					uint8_t db = *tb_row++;
 
 					uint8_t x = da ^ db;
-					x = (x & 0x55) + ((x >> 1) & 0x55);
-					x = (x & 0x33) + ((x >> 2) & 0x33);
-					value += (x & 0x0f) + ((x >> 4) & 0x0f);
+					value += count_bits(x) + WHITE_FILTER * count_bits(db & x);
 				}
 
 				ta += (TILE_WIDTH / 8);
@@ -167,9 +170,7 @@ uint32_t tile_compare(tile_t* a, tile_t* b, uint32_t mode)
 					db = ((db & 0x0f) << 4) | ((db & 0xf0) >> 4);
 
 					uint8_t x = da ^ db;
-					x = (x & 0x55) + ((x >> 1) & 0x55);
-					x = (x & 0x33) + ((x >> 2) & 0x33);
-					value += (x & 0x0f) + ((x >> 4) & 0x0f);
+					value += count_bits(x) + WHITE_FILTER * count_bits(db & x);
 				}
 
 				ta += (TILE_WIDTH / 8);
@@ -326,7 +327,7 @@ int main(int argc, char* argv[])
 
 							tile_index_t tile_index = TILE_NO_TILE;
 
-							const unsigned int thres = 16;
+							const unsigned int thres = FILTER_THRESHOLD;
 							unsigned int max_diff = thres * thres;
 
 
