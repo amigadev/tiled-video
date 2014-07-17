@@ -3,6 +3,9 @@
 
 #include "video.h"
 
+#define FRAME_RATE 30
+#define TICK_RATE (1000/30)
+
 int main(int argc, char* argv[])
 {
 	int ret = 1;
@@ -67,6 +70,8 @@ int main(int argc, char* argv[])
 		uint8_t* stream_begin = stream;
 		uint8_t* stream_end = stream + stream_count;
 
+		uint32_t next_frame_tick = SDL_GetTicks();
+
 		int quit = 0;
 		for (int frame_index = 0; !quit && (frame_index < frame_count); ++frame_index)
 		{
@@ -78,6 +83,15 @@ int main(int argc, char* argv[])
 					case SDL_QUIT: quit = 1; break;
 				}
 			}
+
+			uint32_t curr_frame_tick = SDL_GetTicks();
+			if (curr_frame_tick < next_frame_tick)
+			{
+				SDL_Delay(next_frame_tick - curr_frame_tick);
+				--frame_index;
+				continue;
+			}
+			next_frame_tick += TICK_RATE;
 
 			SDL_RenderClear(rdr);
 
