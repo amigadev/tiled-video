@@ -331,7 +331,7 @@ int main(int argc, char* argv[])
 							unsigned int max_diff = thres * thres;
 
 
-							for (uint32_t i = 0; i < tile_offset; ++i)
+							for (uint32_t i = 0; i < tile_offset && (max_diff > 0); ++i)
 							{
 								uint32_t modes[4] = { 0, TILE_FLIP_X, TILE_FLIP_Y, TILE_FLIP_X|TILE_FLIP_Y };
 								for (unsigned int j = 0; j < sizeof(modes) / sizeof(uint32_t); ++j)
