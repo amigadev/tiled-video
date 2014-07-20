@@ -47,15 +47,17 @@ int main(int argc, char* argv[])
 
 		ret = 0;
 
-		uint32_t tile_count = 0;
-		fread(&tile_count, sizeof(tile_count), 1, stdin);
+		size_t read = 0;
+		header_t header;
+		read += fread(&header, 1, sizeof(header), stdin);
 
-		tile_t* tiles = malloc(tile_count * sizeof(tile_t));
-		fread(tiles, sizeof(tile_t), tile_count, stdin);
+		uint32_t tile_count = ntohl(header.tiles);
+		uint32_t frame_count = ntohl(header.frames);
+		uint32_t stream_count = ntohl(header.stream);
 
-		uint32_t frame_count = 0, stream_count = 0;
-		fread(&frame_count, sizeof(frame_count), 1, stdin);
-		fread(&stream_count, sizeof(stream_count), 1, stdin);
+		uint32_t tile_size = ((tile_count * sizeof(tile_t)) + 511) & ~511;
+		tile_t* tiles = malloc(tile_size);
+		read += fread(tiles, 1, tile_size, stdin);
 
 		uint8_t* stream = malloc(stream_count);
 		fread(stream, 1, stream_count, stdin);
@@ -124,7 +126,7 @@ int main(int argc, char* argv[])
 					for (unsigned int x = 0; x < work->w; x += TILE_WIDTH)
 					{
 						uint8_t* pixels = ((uint8_t*)work->pixels) + x * 4 + y * work->pitch;
-						tile_index_t tindex = *curr_tile_index++;
+						tile_index_t tindex = ntohs(*curr_tile_index++);
 						tile_t* curr_tile = &tiles[tindex & ~TILE_BITS_MASK];
 
 						switch (tindex & TILE_BITS_MASK)

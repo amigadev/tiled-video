@@ -30,6 +30,15 @@ typedef uint16_t tile_index_t;
 
 typedef struct
 {
+	uint32_t tiles;
+	uint32_t frames;
+	uint32_t stream;
+
+	uint32_t pad[(512/sizeof(uint32_t))-3];
+} header_t;
+
+typedef struct
+{
 	tile_index_t tiles[(SCREEN_WIDTH / TILE_WIDTH) * (SCREEN_HEIGHT / TILE_HEIGHT)];
 } frame_t;
 

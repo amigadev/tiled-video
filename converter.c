@@ -419,7 +419,14 @@ int main(int argc, char* argv[])
 
 				for (unsigned int j = 0; j < (SCREEN_WIDTH / TILE_WIDTH) * (SCREEN_HEIGHT / TILE_HEIGHT); ++j)
 				{
-					curr_frame.tiles[j] = (curr_raw_frame->tiles[j] & ~ (TILE_BITS_MASK << TILE_BITS_SHIFT)) | ((curr_raw_frame->tiles[j] & (TILE_BITS_MASK << TILE_BITS_SHIFT)) >> TILE_BITS_SHIFT);
+					if (sizeof(tile_index_t) == sizeof(uint16_t))
+					{
+						curr_frame.tiles[j] = htons((curr_raw_frame->tiles[j] & ~ (TILE_BITS_MASK << TILE_BITS_SHIFT)) | ((curr_raw_frame->tiles[j] & (TILE_BITS_MASK << TILE_BITS_SHIFT)) >> TILE_BITS_SHIFT));
+					}
+					else
+					{
+						curr_frame.tiles[j] = htonl((curr_raw_frame->tiles[j] & ~ (TILE_BITS_MASK << TILE_BITS_SHIFT)) | ((curr_raw_frame->tiles[j] & (TILE_BITS_MASK << TILE_BITS_SHIFT)) >> TILE_BITS_SHIFT));
+					}
 				}
 
 				tile_index_t* curr = curr_frame.tiles;
@@ -513,12 +520,21 @@ int main(int argc, char* argv[])
 
 	if (ret == 0)
 	{
-		fwrite(&tile_offset, sizeof(tile_offset), 1, stdout);
-		fwrite(tiles, sizeof(tile_t), tile_offset, stdout);
+		size_t written = 0;
+		header_t header = { 0 };
+		header.tiles = htonl(tile_offset);
+		header.frames = htonl(frame_offset);
+		header.stream = htonl(stream_offset);
+		written += fwrite(&header, 1, sizeof(header_t), stdout);
+		fprintf(stderr, "header: %lu\n", written);
 
-		fwrite(&frame_offset, sizeof(frame_offset), 1, stdout);
-		fwrite(&stream_offset, sizeof(stream_offset), 1, stdout);
-		fwrite(stream, 1, stream_offset, stdout);
+
+		written += fwrite(tiles, 1, sizeof(tile_t) * tile_offset, stdout);
+		uint8_t pad[512] = { 0 };
+		written += fwrite(pad, 1, 512 - (written & 511), stdout);
+		fprintf(stderr, "tiles: %lu\n", written);
+		written += fwrite(stream, 1, stream_offset, stdout);
+		fprintf(stderr, "stream: %lu\n", written);
 
 		fprintf(stderr, "%u tiles (%lu bytes), %u frames, (%lu bytes), %u stream bytes\n", tile_offset, tile_offset * sizeof(tile_t), frame_offset, frame_offset * sizeof(frame_t), stream_offset);
 	}
