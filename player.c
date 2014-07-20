@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "video.h"
 
