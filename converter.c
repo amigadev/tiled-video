@@ -262,12 +262,21 @@ int main(int argc, char* argv[])
 		raw_frame_t prev_frame = { 0 };
 
 		unsigned int tile_collisions = 0;
+		header_t header = { 0 };
+		if (fread(&header, 1, sizeof(header), stdin) > 0)
+		{
+			tile_offset = tile_reserve = ntohl(header.tiles);
+			tiles = malloc(tile_offset * sizeof(tile_t));
+			fread(tiles, sizeof(tile_t), tile_offset, stdin);
+		}
+		else
+		{
+			tile_t* black_tile = tile_alloc();
+			memset(black_tile, 0, sizeof(tile_t));
 
-		tile_t* black_tile = tile_alloc();
-		memset(black_tile, 0, sizeof(tile_t));
-
-		tile_t* white_tile = tile_alloc();
-		memset(white_tile, 0xff, sizeof(tile_t));
+			tile_t* white_tile = tile_alloc();
+			memset(white_tile, 0xff, sizeof(tile_t));
+		}
 
 		int quit = 0;
 		for (int frame_index = first_frame; !quit && (frame_index <= last_frame); ++frame_index)
