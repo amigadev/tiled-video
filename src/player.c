@@ -6,8 +6,8 @@
 
 #include "video.h"
 
-#define FRAME_RATE 30
-#define TICK_RATE (1000/30)
+#define FRAME_RATE 25
+#define TICK_RATE (1000/FRAME_RATE)
 
 #define PLAYBACK_WIDTH 320
 #define PLAYBACK_HEIGHT 240
