@@ -9,7 +9,7 @@
 
 //#define DEBUG_RENDER
 #define WHITE_FILTER 2
-#define FILTER_THRESHOLD 36
+#define FILTER_THRESHOLD 40
 
 SDL_Surface* load_image(const char* filename)
 {
@@ -30,7 +30,7 @@ SDL_Surface* load_image(const char* filename)
 			break;
 		}
 
-		SDL_Rect rect = { 0, 0, 1440, 1080 };
+		SDL_Rect rect = { 0, 0, 1152, 1080 };
 
 		SDL_BlitScaled(temp, &rect, result, NULL);
 	}
