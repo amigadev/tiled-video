@@ -34,8 +34,22 @@ typedef struct
 	uint32_t frames;
 	uint32_t stream;
 
-	uint32_t pad[(512/sizeof(uint32_t))-3];
+	uint32_t tilein;
+	uint32_t tileout;
+
+	uint32_t streamin;
+	uint32_t streamout;
+
+	uint32_t pad[(512/sizeof(uint32_t))-7];
 } header_t;
+
+#define BLOCK_SIZE 16384
+#define BLOCK_UNCOMPRESSED (1 << 15) /* out */
+typedef struct
+{
+	uint16_t in;
+	uint16_t out;
+} block_t;
 
 typedef struct
 {

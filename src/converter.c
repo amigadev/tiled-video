@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+#include "../external/fastlz/fastlz.h"
+
 #include "video.h"
 
 //#define DEBUG_RENDER
@@ -530,23 +532,84 @@ int main(int argc, char* argv[])
 
 	if (ret == 0)
 	{
+		uint8_t* screen_data = stream;
+		uint32_t screen_length = stream_offset;
+
+		stream = NULL;
+		stream_offset = stream_reserve = 0;
+
+		for (unsigned int i = 0, n = tile_offset * sizeof(tile_t); i < n; i += BLOCK_SIZE)
+		{
+			uint8_t tempbuf[BLOCK_SIZE*2];
+			uint8_t* in = ((uint8_t*)tiles) + i;
+			int inlen = n - i < BLOCK_SIZE ? n-i : BLOCK_SIZE;
+
+			int outlen = fastlz_compress(in, inlen, tempbuf);
+			if (outlen >= inlen)
+			{
+				block_t block = { htons(inlen), htons((BLOCK_UNCOMPRESSED|inlen)) };
+				uint8_t* out = stream_alloc(sizeof(block) + inlen);
+				memcpy(out, &block, sizeof(block));
+				memcpy(out + sizeof(block), in, inlen);
+			}
+			else
+			{
+				block_t block = { htons(inlen), htons(outlen) };
+				uint8_t* out = stream_alloc(sizeof(block) + outlen);
+				memcpy(out, &block, sizeof(block));
+				memcpy(out + sizeof(block), tempbuf, outlen);
+			}
+		}
+
+		uint8_t* tileout_data = stream;
+		uint32_t tileout_length = stream_offset;
+
+		stream = NULL;
+		stream_offset = stream_reserve = 0;
+
+		for (unsigned int i = 0, n = screen_length; i < n; i += BLOCK_SIZE)
+		{
+			uint8_t tempbuf[BLOCK_SIZE*2];
+			uint8_t* in = screen_data + i;
+			int inlen = n - i < BLOCK_SIZE ? n-i : BLOCK_SIZE;
+
+			int outlen = fastlz_compress(in, inlen, tempbuf);
+			if (outlen >= inlen)
+			{
+				block_t block = { htons(inlen), htons((BLOCK_UNCOMPRESSED|inlen)) };
+				uint8_t* out = stream_alloc(sizeof(block) + inlen);
+				memcpy(out, &block, sizeof(block));
+				memcpy(out + sizeof(block), in, inlen);
+			}
+			else
+			{
+				block_t block = { htons(inlen), htons(outlen) };
+				uint8_t* out = stream_alloc(sizeof(block) + outlen);
+				memcpy(out, &block, sizeof(block));
+				memcpy(out + sizeof(block), tempbuf, outlen);
+			}
+		}
+
 		size_t written = 0;
 		header_t header = { 0 };
 		header.tiles = htonl(tile_offset);
 		header.frames = htonl(frame_offset);
-		header.stream = htonl(stream_offset);
+		header.stream = htonl(screen_length);
+		header.tilein = htonl(tile_offset * sizeof(tile_t));
+		header.tileout = htonl(tileout_length);
+		header.streamin = htonl(screen_length);
+		header.streamout = htonl(stream_offset);
 		written += fwrite(&header, 1, sizeof(header_t), stdout);
 		fprintf(stderr, "header: %lu\n", written);
 
-
-		written += fwrite(tiles, 1, sizeof(tile_t) * tile_offset, stdout);
-		uint8_t pad[512] = { 0 };
-		written += fwrite(pad, 1, 512 - (written & 511), stdout);
+		written += fwrite(tileout_data, 1, tileout_length, stdout);
 		fprintf(stderr, "tiles: %lu\n", written);
 		written += fwrite(stream, 1, stream_offset, stdout);
 		fprintf(stderr, "stream: %lu\n", written);
 
-		fprintf(stderr, "%u tiles (%lu bytes), %u frames, (%lu bytes), %u stream bytes\n", tile_offset, tile_offset * sizeof(tile_t), frame_offset, frame_offset * sizeof(frame_t), stream_offset);
+		fprintf(stderr, "%u tiles (%u bytes), %u frames, (%lu bytes), %u stream bytes\n", tile_offset, tileout_length, frame_offset, frame_offset * sizeof(frame_t), stream_offset);
+		fprintf(stderr, "   tiles: %lu -> %u bytes (%lu%%)\n", tile_offset * sizeof(tile_t), tileout_length, (tileout_length * 100) / (tile_offset * sizeof(tile_t)));
+		fprintf(stderr, "   stream: %u -> %u bytes (%u%%)\n", screen_length, stream_offset, (stream_offset * 100) / screen_length);
 	}
 
 	return ret;

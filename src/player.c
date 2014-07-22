@@ -2,10 +2,76 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+#include "../external/fastlz/fastlz.h"
+
 #include "video.h"
 
 #define FRAME_RATE 30
 #define TICK_RATE (1000/30)
+
+int readcompressed(uint8_t* out, int outlen, FILE* in, int inlen)
+{
+	uint8_t tempbuf[BLOCK_SIZE*2];
+	uint32_t templen = 0;
+	int actual = 0;
+
+	memset(out, 0, outlen);
+
+	fprintf(stderr, "read compressed: %d -> %d\n", inlen, outlen);
+
+	while (outlen > 0)
+	{
+		fprintf(stderr, "buffer fill: %u / %lu\n", templen, sizeof(tempbuf));
+		if (inlen > 0)
+		{
+			int readlen = (templen + inlen) > sizeof(tempbuf) ? sizeof(tempbuf) - templen : inlen;
+			int r = fread(tempbuf + templen, 1, readlen, in);
+			if (r != readlen)
+			{
+				fprintf(stderr, "read mismatch (%d != %d)\n", r, readlen);
+				break;
+			}
+			fprintf(stderr, " read %d bytes\n", readlen);
+			templen += r;
+			inlen -= r;
+		}
+
+		block_t* tempblock = (block_t*)tempbuf;
+		block_t block = { ntohs(tempblock->in), ntohs(tempblock->out) };
+		if (block.in > outlen)
+		{
+			fprintf(stderr, "block input too large (%u > %d)\n", block.in, outlen);
+			break;
+		}
+
+		if (block.out & BLOCK_UNCOMPRESSED)
+		{
+			fprintf(stderr, "decode uncompressed: %u\n", block.in);
+			memcpy(out, tempbuf + sizeof(block_t), block.in);
+		}
+		else
+		{
+			fprintf(stderr, "decode compressed: %u -> %u\n", block.out, block.in);
+			int r = fastlz_decompress(tempbuf + sizeof(block_t), block.out, out, outlen);
+			if (r != block.in)
+			{
+				fprintf(stderr, "compressed block size mismatch (%d != %u)\n", r, block.in);
+				break;
+			}
+		}
+
+		out += block.in;
+		outlen -= block.in;
+		actual += block.in;
+
+		int left = templen - (sizeof(block_t) + (block.out & ~BLOCK_UNCOMPRESSED));
+		memcpy(tempbuf, tempbuf + (templen - left), left);
+		templen = left;
+	}
+
+	fprintf(stderr, "actual: %d\n", actual);
+	return actual;
+}
 
 int main(int argc, char* argv[])
 {
@@ -48,19 +114,27 @@ int main(int argc, char* argv[])
 
 		ret = 0;
 
-		size_t read = 0;
 		header_t header;
-		read += fread(&header, 1, sizeof(header), stdin);
+		fread(&header, 1, sizeof(header), stdin);
 
 		uint32_t tile_count = ntohl(header.tiles);
 		uint32_t frame_count = ntohl(header.frames);
 		uint32_t stream_count = ntohl(header.stream);
 
-		uint32_t tile_size = ((tile_count * sizeof(tile_t)) + 511) & ~511;
+		uint32_t tile_size = ntohl(header.tilein);
 		tile_t* tiles = malloc(tile_size);
-		read += fread(tiles, 1, tile_size, stdin);
+		if (readcompressed((uint8_t*)tiles, tile_size, stdin, ntohl(header.tileout)) != (htonl(header.tiles) * sizeof(tile_t)))
+		{
+			fprintf(stderr, "tile size mismatch\n");
+			break;
+		}
 
-		uint8_t* stream = malloc(stream_count);
+		uint8_t* stream = malloc(header.streamin);
+		if (readcompressed(stream, stream_count, stdin, ntohl(header.streamout)) != stream_count)
+		{
+			fprintf(stderr, "stream size mismatch\n");
+			break;
+		}
 		fread(stream, 1, stream_count, stdin);
 
 		fprintf(stderr, "%u tiles, %u frames, %u stream bytes\n", tile_count, frame_count, stream_count);
@@ -107,7 +181,7 @@ int main(int argc, char* argv[])
 				}
 
 				uint8_t length = *stream_begin;
-				uint8_t dlen = length & 0x7f;
+				uint8_t dlen = (length & 0x7f);
 				if (length & 0x80)
 				{
 					memcpy(&curr_frame.tiles[i], stream_begin + 1, dlen * sizeof(tile_index_t));
