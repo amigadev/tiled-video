@@ -1,7 +1,7 @@
 #pragma once
 
 #define SCREEN_WIDTH (320)
-#define SCREEN_HEIGHT (240)
+#define SCREEN_HEIGHT (192)
 
 #define TILE_WIDTH 16
 #define TILE_HEIGHT 16

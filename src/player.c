@@ -9,6 +9,9 @@
 #define FRAME_RATE 30
 #define TICK_RATE (1000/30)
 
+#define PLAYBACK_WIDTH 320
+#define PLAYBACK_HEIGHT 240
+
 int readcompressed(uint8_t* out, int outlen, FILE* in, int inlen)
 {
 	uint8_t tempbuf[BLOCK_SIZE*2];
@@ -95,7 +98,7 @@ int main(int argc, char* argv[])
 			break;
 		}	
 
-		if (!(win = SDL_CreateWindow("Player", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0))) {
+		if (!(win = SDL_CreateWindow("Player", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, PLAYBACK_WIDTH, PLAYBACK_HEIGHT, 0))) {
 			fprintf(stderr, "Could not create window\n");
 			break;
 		}		
