@@ -1,5 +1,5 @@
 CCFLAGS=-I/usr/local/include -O2
-LDFLAGS=-L/usr/local/lib -lSDL2 -lSDL2_image
+LDFLAGS=-L/usr/local/lib -lSDL2
 
 all: out converter
 
@@ -10,7 +10,7 @@ clean:
 	rm -rf out converter player
 
 converter: out/converter.o out/renderer.o out/tiles.o out/stream.o out/frames.o
-	$(CC) -o $@ $(LDFLAGS) $^
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 player: out/player.o out/fastlz.o
 	$(CC) -o $@ $(LDFLAGS) $^
