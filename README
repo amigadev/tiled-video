@@ -1,1 +1,5 @@
 Simple test to convert a series of 1-bit images (black/white) into a video and optimizing the tiles used when decoding.
+
+To prepare an image sequence for conversion, use the following command line:
+
+ffmpeg -i in.mp4 -y -s 320x256 -vcodec rawvideo -f image2 -pix_fmt gray -r 25 out/image-%04d.raw
