@@ -1,4 +1,9 @@
 #include "renderer.h"
+#include "stream.h"
+#include "frames.h"
+
+#include <string.h>
+#include <stdio.h>
 
 int main(int argc, char* argv[])
 {
@@ -18,4 +23,37 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "Could not read stream\n");
 		return -1;
 	}
+
+	const tiles_t* tiles = stream->tiles;
+	const frames_t* frames = stream->frames;
+
+	for (size_t index = 0; index < frames->size; ++index)
+	{
+		const frame_t* frame = &(frames->frames[index]);
+		const tile_index_t* indices = frame->tiles;
+
+		fprintf(stderr, "\rframe: %lu", index);
+
+		for (size_t n = 0; n < (FRAME_WIDTH / TILE_WIDTH) * (FRAME_HEIGHT / TILE_HEIGHT); ++n)
+		{
+			size_t x = (n % (FRAME_WIDTH / TILE_WIDTH)) * TILE_WIDTH;
+			size_t y = (n / (FRAME_WIDTH / TILE_WIDTH)) * TILE_HEIGHT;
+
+			uint8_t* target = &buffer[x + y * FRAME_WIDTH];
+
+			tile_index_t ti = *(indices++);
+			uint32_t offset = ti & ~TILE_BITS_MASK;
+
+			const tile_t* tile = &(tiles->tiles[offset]);
+			tile_render(target, &(tile->data), ti & TILE_BITS_MASK, FRAME_WIDTH);
+
+		}
+
+		if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, buffer, 400) < 0)
+			return -1;
+	}
+
+	fprintf(stderr, "\n");
+
+	renderer_destroy();
 }

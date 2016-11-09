@@ -43,6 +43,7 @@ typedef struct tiles_t
 } tiles_t;
 
 void build_tile(tile_t* tile, const uint8_t* pixels, uint8_t threshold, int32_t pitch);
+void tile_render(uint8_t* target, const raw_tile_t* tile, uint32_t flags, int32_t pitch);
 
 tiles_t* tiles_create(stream_t* stream);
 tile_index_t tiles_insert(tiles_t* tiles, const tile_t* tile);

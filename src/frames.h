@@ -22,4 +22,4 @@ typedef struct frames_t
 } frames_t;
 
 frames_t* frames_create(stream_t* stream);
-frame_t* frames_add(frames_t* frames);
+void frames_add(frames_t* frames, const frame_t* frame);

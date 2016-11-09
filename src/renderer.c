@@ -40,7 +40,7 @@ int renderer_create(uint32_t width, uint32_t height, uint32_t flags)
 	return 0;
 }
 
-int renderer_update(uint32_t width, uint32_t height, uint8_t* bytes)
+int renderer_update(uint32_t width, uint32_t height, uint8_t* bytes, uint32_t sleepTime)
 {
 	SDL_Event event;
 	if (SDL_PollEvent(&event))
@@ -64,6 +64,9 @@ int renderer_update(uint32_t width, uint32_t height, uint8_t* bytes)
 	SDL_Surface* screen = SDL_GetWindowSurface(window);
 	SDL_BlitSurface(buffer, NULL, screen, NULL);
 	SDL_UpdateWindowSurface(window);
+
+	if (sleepTime > 0)
+		SDL_Delay(sleepTime);
 
 	return 0;
 }

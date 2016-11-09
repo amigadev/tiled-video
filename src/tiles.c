@@ -231,6 +231,31 @@ uint32_t tile_diff(const raw_tile_t* a, const raw_tile_t* b, uint32_t* used_perm
 	return curr_error;
 }
 
+void tile_render(uint8_t* target, const raw_tile_t* tile, uint32_t flags, int32_t pitch)
+{
+	raw_tile_t temp = *tile;
+	if (flags & TILE_FLIP_X)
+		temp = tile_flip_x(&temp);
+	if (flags & TILE_FLIP_Y)
+		temp = tile_flip_y(&temp);
+	if (flags & TILE_INVERT)
+		temp = tile_invert(&temp);
+
+	for (size_t y = 0; y < TILE_HEIGHT; ++y)
+	{
+		for (size_t x = 0; x < TILE_WIDTH; x += 8)
+		{
+			uint8_t* curr = &(target[x + y * pitch]);
+			uint8_t bits = tile->bits[(x + y * TILE_WIDTH) / 8];
+
+			for (size_t i = 0; i < 8; ++i)
+			{
+				*curr++ = bits & (1 << (7 - i)) ? 0xff : 0x00;
+			}
+		}
+	}
+}
+
 // TODO: allow for permutations
 uint32_t tiles_compare(tiles_t* tiles, uint32_t local, uint32_t search, uint32_t* actual_error, uint32_t* actual_permutation)
 {

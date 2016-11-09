@@ -11,7 +11,7 @@ frames_t* frames_create(stream_t* stream)
 	return frames;
 }
 
-frame_t* frames_add(frames_t* frames)
+void frames_add(frames_t* frames, const frame_t* in)
 {
 	if (frames->size == frames->capacity)
 	{
@@ -26,5 +26,5 @@ frame_t* frames_add(frames_t* frames)
 		frames->capacity = newCapacity;
 	}
 
-	return &(frames->frames[frames->size++]);
+	memcpy(&(frames->frames[frames->size++]), in, sizeof(frame_t));
 }
