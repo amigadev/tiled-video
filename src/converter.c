@@ -5,11 +5,9 @@
 #include <string.h>
 #include <stdio.h>
 
-//#define FIRST_INDEX (1)
-//#define LAST_INDEX (5478)
-
-#define FIRST_INDEX 1200
-#define LAST_INDEX 1200
+#define FIRST_INDEX (1)
+#define LAST_INDEX (5478)
+//#define LAST_INDEX (500)
 
 #define MAX_ERROR (32)
 
@@ -48,7 +46,7 @@ int main(int argc, char* argv[])
 			{
 				tile_t tile;
 
-				build_tile(&tile, input + x + y * FRAME_HEIGHT, 200, FRAME_WIDTH);  
+				build_tile(&tile, input + x + y * FRAME_WIDTH, 200, FRAME_WIDTH);
 
 				tile_index_t index = tiles_insert(tiles, &tile);
 				*(indices++) = index;
@@ -59,7 +57,7 @@ int main(int argc, char* argv[])
 
 		frames_add(frames, &frame);
 
-		if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, input, 400) < 0)
+		if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, input, 0) < 0)
 			return 0;
 
 		fprintf(stderr, "\rpath: %s, frames: %lu tiles: %lu/%lu (%.2f%%)", path, frames->size, tiles->size, actual, tiles->size*100.0f / actual);

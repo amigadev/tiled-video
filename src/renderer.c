@@ -5,6 +5,8 @@
 SDL_Window* window = NULL;
 SDL_Surface* buffer = NULL;
 
+#define DEBUG_COLORS
+
 int renderer_create(uint32_t width, uint32_t height, uint32_t flags)
 {
 	if (SDL_Init((flags == RENDER_VISIBLE) ? SDL_INIT_EVERYTHING : SDL_INIT_EVENTS) < 0)
@@ -33,6 +35,27 @@ int renderer_create(uint32_t width, uint32_t height, uint32_t flags)
 			palette[i].a = 255;
 			palette[i].r = palette[i].g = palette[i].b = i;
 		}
+
+#if defined(DEBUG_COLORS)
+/*
+1000 8 248 = 111 x y invert 
+1001 9 249 = 110 x y
+1010 a 250 = 101 x invert
+1011 b 251 = 100 x
+1100 c 252 = 011 y invert
+1101 d 253 = 010 y
+1110 e 254 = 001 invert
+1111 f 255 = 000
+*/
+		palette[248].r = 0x7f; palette[248].g = 0x7f; palette[248].g = 0x7f;
+		palette[249].r = 0x7f; palette[249].g = 0x7f; palette[249].g = 0xff;
+		palette[250].r = 0x7f; palette[250].g = 0xff; palette[250].g = 0x7f;
+		palette[251].r = 0x7f; palette[251].g = 0xff; palette[251].g = 0xff;
+		palette[252].r = 0xff; palette[252].g = 0x7f; palette[252].g = 0x7f;
+		palette[253].r = 0xff; palette[253].g = 0x7f; palette[253].g = 0xff;
+		palette[254].r = 0xff; palette[254].g = 0xff; palette[254].g = 0x7f;
+		palette[255].r = 0xff; palette[255].g = 0xff; palette[255].g = 0xff;
+#endif
 
 		SDL_SetPaletteColors(buffer->format->palette, palette, 0, 256);
 	}

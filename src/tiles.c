@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define DEBUG_COLORS
+
 static uint32_t count_bits(uint8_t x)
 {
 	x = (x & 0x55) + ((x >> 1) & 0x55);
@@ -72,7 +74,7 @@ raw_tile_t tile_flip_x(const raw_tile_t* in)
 			uint8_t byte = iny[x];
 
 			byte = ((byte & 0x55) << 1) | ((byte & 0xaa) >> 1);
-			byte = ((byte & 0x33) << 1) | ((byte & 0xcc) >> 2);
+			byte = ((byte & 0x33) << 2) | ((byte & 0xcc) >> 2);
 			byte = ((byte & 0x0f) << 4) | ((byte & 0xf0) >> 4);
 
 			outy[(TILE_WIDTH / 8) - (x + 1)] = byte;
@@ -233,6 +235,12 @@ uint32_t tile_diff(const raw_tile_t* a, const raw_tile_t* b, uint32_t* used_perm
 
 void tile_render(uint8_t* target, const raw_tile_t* tile, uint32_t flags, int32_t pitch)
 {
+#if defined(DEBUG_COLORS)
+	uint8_t color = 0xf8 | ((~flags & TILE_BITS_MASK) >> 29);
+#else
+	const uint8_t color = 0xff;
+#endif
+
 	raw_tile_t temp = *tile;
 	if (flags & TILE_FLIP_X)
 		temp = tile_flip_x(&temp);
@@ -246,11 +254,11 @@ void tile_render(uint8_t* target, const raw_tile_t* tile, uint32_t flags, int32_
 		for (size_t x = 0; x < TILE_WIDTH; x += 8)
 		{
 			uint8_t* curr = &(target[x + y * pitch]);
-			uint8_t bits = tile->bits[(x + y * TILE_WIDTH) / 8];
+			uint8_t bits = temp.bits[(x + y * TILE_WIDTH) / 8];
 
 			for (size_t i = 0; i < 8; ++i)
 			{
-				*curr++ = bits & (1 << (7 - i)) ? 0xff : 0x00;
+				*curr++ = bits & (1 << (7 - i)) ? color : 0x00;
 			}
 		}
 	}
