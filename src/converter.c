@@ -1,15 +1,20 @@
 #include "renderer.h"
 #include "stream.h"
 #include "frames.h"
+#include "bits.h"
 
 #include <string.h>
 #include <stdio.h>
 
 #define FIRST_INDEX (1)
+//#define LAST_INDEX (250)
+#ifndef LAST_INDEX
 #define LAST_INDEX (5478)
-//#define LAST_INDEX (500)
+#endif
 
-#define MAX_ERROR (32)
+#define MAX_BLOCK_ERROR (8)
+#define BLOCK_PASSES (10)
+#define MAX_TILE_ERROR (32)
 
 int main(int argc, char* argv[])
 {
@@ -19,8 +24,8 @@ int main(int argc, char* argv[])
 		return -1;
 
 	stream_t* stream = stream_create();
-	tiles_t* tiles = tiles_create(stream);
-	frames_t* frames = frames_create(stream);
+	frames_t* frames = &(stream->frames);
+	tiles_t* tiles = &(stream->tiles);
 	size_t actual = 0;
 
 	for (int index = FIRST_INDEX; index <= LAST_INDEX; ++index)
@@ -46,24 +51,31 @@ int main(int argc, char* argv[])
 			{
 				tile_t tile;
 
-				build_tile(&tile, input + x + y * FRAME_WIDTH, 200, FRAME_WIDTH);
-
-				tile_index_t index = tiles_insert(tiles, &tile);
-				*(indices++) = index;
-
+				*(indices++) = tiles_insert(tiles, input + x + y * FRAME_WIDTH, 200, FRAME_WIDTH);
 				++ actual;
 			}
 		}
 
 		frames_add(frames, &frame);
 
-		if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, input, 0) < 0)
-			return 0;
+        if (index % 10 == 0)
+        {
+            if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, input, 0) < 0)
+                return 0;
+        }
 
-		fprintf(stderr, "\rpath: %s, frames: %lu tiles: %lu/%lu (%.2f%%)", path, frames->size, tiles->size, actual, tiles->size*100.0f / actual);
+		fprintf(stderr, "\rpath: %s, frames: %lu tiles: %lu/%lu blocks: %lu", path, buffer_count(&(frames->buffer)), buffer_count(&(tiles->buffer)), actual, buffer_count(&(tiles->blocks.buffer)));
 	}
 
-	fprintf(stderr, "\nsaving...");
+	renderer_destroy();
+
+    fprintf(stderr, "\n");
+
+    stream_optimize_blocks(stream, BLOCK_PASSES, MAX_BLOCK_ERROR);
+    stream_optimize_tiles(stream, MAX_TILE_ERROR);
+//    stream_optimize_frames(stream);
+
+	fprintf(stderr, "\nsaving...\n");
 
 	FILE* out = fopen("anim.bin", "wb");
 	if (stream_save(stream, out) < 0)
@@ -73,10 +85,7 @@ int main(int argc, char* argv[])
 	}
 	fclose(out);
 
-	fprintf(stderr, "\n");
-
 	stream_destroy(stream);
-	renderer_destroy();
 
 	return 0;
 }

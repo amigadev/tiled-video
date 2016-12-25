@@ -1,306 +1,459 @@
 #include "tiles.h"
+#include "blocks.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
-#define DEBUG_COLORS
+//#define DEBUG_COLORS
 
-static uint32_t count_bits(uint8_t x)
-{
-	x = (x & 0x55) + ((x >> 1) & 0x55);
-	x = (x & 0x33) + ((x >> 2) & 0x33);
-	return (x & 0x0f) + ((x >> 4) & 0x0f);
-}
+#define sizeof_array(x) (sizeof(x) / sizeof(x[0]))
 
-// this hash allows us to search close matches
-static uint32_t build_hash(const void* input, size_t length)
+static uint32_t tile_variants[] = {
+    0,
+    TILE_FLIP_Y,
+    TILE_INVERT,
+    TILE_INVERT|TILE_FLIP_Y,
+    TILE_FLIP_X,
+    TILE_FLIP_X|TILE_FLIP_Y,
+    TILE_INVERT|TILE_FLIP_X,
+    TILE_INVERT|TILE_FLIP_X|TILE_FLIP_Y
+};
+
+
+uint32_t hash_tile(const tiles_t* tiles, const tile_t* tile)
 {
-	uint32_t temp = 0;//2166136261UL;
-	for (const uint8_t* begin = (const uint8_t*)input, *end = ((const uint8_t*)input) + length; begin != end; ++begin)
+	uint32_t temp = 0;
+	for (size_t i = 0; i < (TILE_WIDTH / BLOCK_WIDTH) * (TILE_HEIGHT / BLOCK_HEIGHT); ++i)
 	{
-		temp += count_bits(*begin);
+		block_index_t index = tile->indices[i];
+		block_t block = blocks_get(&(tiles->blocks), index);
+		temp += hash_block(&block);
 	}
-
 	return temp;
 }
 
-void build_tile(tile_t* tile, const uint8_t* pixels, uint8_t threshold, int32_t pitch)
+void tiles_init(tiles_t* tiles)
 {
-	memset(tile, 0, sizeof(tile_t));
-
-	for (size_t y = 0; y < TILE_HEIGHT; ++y)
-	{
-		for (size_t x = 0; x < TILE_WIDTH; x += 8)
-		{
-			uint8_t bits = 0;
-			for (size_t i = 0; i < 8; ++i)
-			{
-				bits = (bits << 1) | ((pixels[x + i + (y * pitch)] > threshold) ? 1 : 0);
-			}
-			tile->data.bits[(x / 8) + y * (TILE_WIDTH / 8)] = bits;
-		}
-	}
-
-	tile->remap = TILE_NO_TILE;
-	tile->next = TILE_NO_TILE;
-	tile->count = 1;
-}
-
-tiles_t* tiles_create(stream_t* stream)
-{
-	tiles_t* tiles = malloc(sizeof(tiles_t));
-	memset(tiles, 0, sizeof(tiles_t));
+	blocks_init(&(tiles->blocks));
+	buffer_init(&(tiles->buffer), sizeof(tile_t));
 
 	for (size_t i = 0; i < TILES_HASH_SIZE; ++i)
-		tiles->hash[i] = TILE_NO_TILE;
-
-	stream->tiles = tiles;
-	return tiles;
+		tiles->hash[i] = NO_TILE;
 }
 
-#define sizeof_array(x) (sizeof(x) / sizeof(x[0])) 
-
-raw_tile_t tile_flip_x(const raw_tile_t* in)
+void tiles_release(tiles_t* tiles)
 {
-	raw_tile_t out;
-	for (size_t y = 0; y < TILE_HEIGHT; ++y)
+	blocks_release(&(tiles->blocks));
+	buffer_release(&(tiles->buffer));
+}
+
+static tile_t tile_flip_x(const tile_t* in)
+{
+	tile_t out;
+
+	for (size_t y = 0; y < (TILE_HEIGHT / BLOCK_HEIGHT); ++y)
 	{
-		const uint8_t* iny = &(in->bits[y * (TILE_WIDTH / 8)]);
-		uint8_t* outy = &(out.bits[(TILE_HEIGHT - (y + 1)) * (TILE_WIDTH / 8)]);
-
-		for (size_t x = 0; x < TILE_WIDTH / 8; ++x)
+		for (size_t x = 0; x < (TILE_WIDTH / BLOCK_WIDTH); ++x)
 		{
-			uint8_t byte = iny[x];
-
-			byte = ((byte & 0x55) << 1) | ((byte & 0xaa) >> 1);
-			byte = ((byte & 0x33) << 2) | ((byte & 0xcc) >> 2);
-			byte = ((byte & 0x0f) << 4) | ((byte & 0xf0) >> 4);
-
-			outy[(TILE_WIDTH / 8) - (x + 1)] = byte;
+			block_index_t t = in->indices[x + y * (TILE_WIDTH / BLOCK_WIDTH)];
+			out.indices[(TILE_WIDTH / BLOCK_WIDTH) - (x + 1) + y * (TILE_WIDTH / BLOCK_WIDTH)] = t ^ BLOCK_FLIP_X;
 		}
 	}
+
 	return out;
 }
 
-raw_tile_t tile_flip_y(const raw_tile_t* in)
+static tile_t tile_flip_y(const tile_t* in)
 {
-	raw_tile_t out;
-	for (size_t y = 0; y < TILE_HEIGHT; ++y)
+	tile_t out;
+
+	for (size_t y = 0; y < (TILE_HEIGHT / BLOCK_HEIGHT); ++y)
 	{
-		const uint8_t* iny = &(in->bits[y * (TILE_WIDTH / 8)]);
-		uint8_t* outy = &(out.bits[(TILE_HEIGHT - (y + 1)) * (TILE_WIDTH / 8)]);
-		memcpy(outy, iny, TILE_WIDTH / 8);
+		const block_index_t* iny = &(in->indices[y * (TILE_WIDTH / BLOCK_WIDTH)]);
+		block_index_t* outy = &(out.indices[((TILE_HEIGHT / BLOCK_HEIGHT) - (y+1)) * (TILE_WIDTH / BLOCK_WIDTH)]);
+
+		for (size_t x = 0; x < (TILE_WIDTH / BLOCK_WIDTH); ++x)
+		{
+			*(outy++) = (*(iny++)) ^ BLOCK_FLIP_Y;
+		}
 	}
+
 	return out;
 }
 
-raw_tile_t tile_invert(const raw_tile_t* in)
+static tile_t tile_invert(const tile_t* in)
 {
-	raw_tile_t out;
-	for (size_t i = 0; i < sizeof(out.bits); ++i)
-		out.bits[i] = ~(in->bits[i]);
+	tile_t out;
+
+	for (size_t i = 0; i < (TILE_WIDTH / BLOCK_WIDTH) * (TILE_HEIGHT / BLOCK_HEIGHT); ++i)
+	{
+		out.indices[i] = in->indices[i] ^ BLOCK_INVERT;		
+	}
+
 	return out;
+}
+
+tile_t tiles_get(const tiles_t* tiles, tile_index_t ti)
+{
+    uint32_t index = ti & ~TILE_BITS_MASK;
+    tile_t temp = *((tile_t*)buffer_get(&(tiles->buffer), index));
+
+    if (ti & TILE_FLIP_X)
+        temp = tile_flip_x(&temp);
+    if (ti & TILE_FLIP_Y)
+        temp = tile_flip_y(&temp);
+    if (ti & TILE_INVERT)
+        temp = tile_invert(&temp);
+
+    return temp;
+}
+
+int tile_match(const tiles_t* tiles, const tile_t* a, const tile_t* b)
+{
+    int cmp = 0;
+    for (size_t i = 0; !cmp && i < (TILE_WIDTH / BLOCK_WIDTH) * (TILE_HEIGHT / BLOCK_HEIGHT); ++i)
+    {
+        block_t ba = blocks_get(&(tiles->blocks), a->indices[i]);
+        block_t bb = blocks_get(&(tiles->blocks), b->indices[i]);
+
+        cmp = memcmp(&(ba.bits), &(bb.bits), sizeof(ba.bits));
+    }
+
+    return cmp;
 }
 
 tile_index_t tiles_match(tiles_t* tiles, const tile_t* tile)
 {
-	uint32_t permutations[] = {
-		// blitter friendly permutations
-		0,
-		TILE_FLIP_Y,
-		TILE_INVERT,
-		TILE_INVERT|TILE_FLIP_Y,
-		// permutations that require cpu
-		TILE_FLIP_X,
-		TILE_FLIP_X|TILE_FLIP_Y,
-		TILE_INVERT|TILE_FLIP_X,
-		TILE_INVERT|TILE_FLIP_X|TILE_FLIP_Y
-	};
-
-
-	for (size_t i = 0; i < sizeof_array(permutations); ++i)
+	for (size_t i = 0; i < sizeof_array(tile_variants); ++i)
 	{
-		uint32_t permutation = permutations[i];
-		raw_tile_t temp = tile->data;
+		uint32_t variant = tile_variants[i];
 
-		if (permutation & TILE_FLIP_X)
+		tile_t temp = *tile;
+
+		if (variant & TILE_FLIP_X)
 			temp = tile_flip_x(&temp);
-		if (permutation & TILE_FLIP_Y)
-			temp = tile_flip_y(&temp);
-		if (permutation & TILE_INVERT)
-			temp = tile_invert(&temp);
+		if (variant & TILE_FLIP_Y)
+		    temp = tile_flip_y(&temp);
+        if (variant & TILE_INVERT)
+            temp = tile_invert(&temp);
 
-		uint32_t hash = build_hash(&temp, sizeof(raw_tile_t)) % TILES_HASH_SIZE;
+		uint32_t hash = hash_tile(tiles, &temp) & (TILES_HASH_SIZE-1);
 		uint32_t index = tiles->hash[hash];
 
-		while (index != TILE_NO_TILE)
+		while (index != NO_TILE)
 		{
-			const tile_t* candidate = &tiles->tiles[index];
-			if (!memcmp(&(candidate->data),&temp,sizeof(raw_tile_t)))
-			{
+			const tile_t* candidate = buffer_get(&(tiles->buffer), index);
+
+            if (!tile_match(tiles, &temp, candidate))
 				break;
-			}	 
 			index = candidate->next;
 		}
 
-		if (index != TILE_NO_TILE)
+		if (index != NO_TILE)
 		{
-			tile_t* match = &tiles->tiles[index];
-			match->count++;
-
-			return permutation | index;
+			tile_t* match = buffer_get(&(tiles->buffer), index);
+			return variant | index;
 		}
 	}
 
-	return TILE_NO_TILE;
+	return NO_BLOCK;
 }
 
-tile_index_t tiles_insert(tiles_t* tiles, const tile_t* tile)
+tile_index_t tiles_insert(tiles_t* tiles, const uint8_t* pixels, uint8_t threshold, int32_t pitch)
 {
-	tile_index_t index = tiles_match(tiles, tile);
-	if (index != TILE_NO_TILE)
+	tile_t temp;
+
+	block_index_t* indices = temp.indices;
+	for (size_t y = 0; y < (TILE_HEIGHT / BLOCK_HEIGHT); ++y)
 	{
+		for (size_t x = 0; x < (TILE_WIDTH / BLOCK_WIDTH); ++x)
+		{
+			const uint8_t* start = pixels + x * BLOCK_WIDTH + (y * BLOCK_HEIGHT) * pitch;
+			block_t block = build_block(start, threshold, pitch);
+
+			*(indices++) = blocks_insert(&(tiles->blocks), &block);
+		}
+	}
+
+	tile_index_t index = tiles_match(tiles, &temp);
+	if (index != NO_TILE)
+	{
+        tile_t* out = buffer_get(&(tiles->buffer), index & ~TILE_BITS_MASK);
+        out->count++;
+
 		return index;
 	}
 
-	if (tiles->size == tiles->capacity)
-	{
-		size_t newCapacity = tiles->size > 0 ? tiles->capacity * 2 : 1024;
-		tile_t* newTiles = malloc(sizeof(tile_t) * newCapacity);
-		memcpy(newTiles, tiles->tiles, tiles->size * sizeof(tile_t));
-		free(tiles->tiles);
+	tile_t* out = buffer_alloc(&(tiles->buffer), 1);
 
-		tiles->tiles = newTiles;
-		tiles->capacity = newCapacity;
-	}
+	memcpy(out->indices, temp.indices, sizeof(out->indices));
 
-	tile_t* newTile = &tiles->tiles[tiles->size];
+	uint32_t offset = buffer_offset(&(tiles->buffer), out);
+	uint32_t hash = hash_tile(tiles, &temp) & (TILES_HASH_SIZE-1);
+	out->next = tiles->hash[hash];
+	tiles->hash[hash] = offset;
 
-	uint32_t hash = build_hash(&(tile->data), sizeof(tile->data)) % TILES_HASH_SIZE;
-	memcpy(newTile, tile, sizeof(tile_t));
-	newTile->next = tiles->hash[hash];
-	tiles->hash[hash] = tiles->size;
+	out->count = 1;
+	out->remap = NO_TILE;
 
-	return (tiles->size++);
+	return offset;
 }
 
-uint32_t tile_diff(const raw_tile_t* a, const raw_tile_t* b, uint32_t* used_permutation)
+void tiles_remap_blocks(tiles_t* tiles, const block_index_t* remaps)
 {
-	// TODO: run these further out (to prioritize blitter-friendly modes)
+    for (size_t i = 0; i < TILES_HASH_SIZE; ++i)
+    {
+        tiles->hash[i] = NO_TILE;
+    }
 
-	const uint32_t permutations[] = {
-		// 
-		0,
-		TILE_FLIP_Y,
-		TILE_INVERT|TILE_FLIP_Y,
-		TILE_INVERT,
-		TILE_FLIP_X,
-		TILE_FLIP_X|TILE_FLIP_Y,
-		TILE_INVERT|TILE_FLIP_X,
-		TILE_INVERT|TILE_FLIP_X|TILE_FLIP_Y
-	};
+    for (size_t i = 0, n = buffer_count(&(tiles->buffer)); i < n; ++i)
+    {
+        tile_t* curr = buffer_get(&(tiles->buffer), i);
+        for (size_t j = 0; j < TILE_INDEX_COUNT; ++j)
+        {
+            uint32_t in = curr->indices[j];
+            uint32_t remap = remaps[(in & ~BLOCK_BITS_MASK)];
 
-	uint32_t curr_error = (uint32_t)~0UL;
-	uint32_t curr_permutation = 0L;
+            uint32_t out = remap^(in & BLOCK_BITS_MASK);
+            curr->indices[j] = out;
+        }
 
-	for (int i = 0; i < sizeof_array(permutations); ++i)
-	{
-		uint32_t permutation = permutations[i];
-		raw_tile_t temp = *b;
-
-		if (permutation & TILE_FLIP_X)
-			temp = tile_flip_x(&temp);
-		if (permutation & TILE_FLIP_Y)
-			temp = tile_flip_y(&temp);
-		if (permutation & TILE_INVERT)
-			temp = tile_invert(&temp);
-
-		uint32_t error = 0;
-		for (size_t i = 0; i < (TILE_WIDTH / 8) * TILE_HEIGHT; ++i)
-		{
-			error += count_bits(a->bits[i] ^ temp.bits[i]);
-		}
-
-		if (error < curr_error)
-		{
-			curr_error = error;
-			curr_permutation = permutation;
-		}
-	}
-
-	*used_permutation = curr_permutation;
-	return curr_error;
+        uint32_t hash = hash_tile(tiles, curr) & (TILES_HASH_SIZE-1);
+        curr->next = tiles->hash[hash];
+        tiles->hash[hash] = i;
+    }
 }
 
-void tile_render(uint8_t* target, const raw_tile_t* tile, uint32_t flags, int32_t pitch)
+// TODO: match with variants
+void tiles_dedupe(tiles_t* tiles)
 {
-#if defined(DEBUG_COLORS)
-	uint8_t color = 0xf8 | ((~flags & TILE_BITS_MASK) >> 29);
-#else
-	const uint8_t color = 0xff;
-#endif
+    size_t removed = 0;
 
-	raw_tile_t temp = *tile;
-	if (flags & TILE_FLIP_X)
-		temp = tile_flip_x(&temp);
-	if (flags & TILE_FLIP_Y)
-		temp = tile_flip_y(&temp);
-	if (flags & TILE_INVERT)
-		temp = tile_invert(&temp);
+    for (size_t i = 0; i < TILES_HASH_SIZE; ++i)
+    {
+        tiles->hash[i] = NO_TILE;
+    }
 
-	for (size_t y = 0; y < TILE_HEIGHT; ++y)
-	{
-		for (size_t x = 0; x < TILE_WIDTH; x += 8)
-		{
-			uint8_t* curr = &(target[x + y * pitch]);
-			uint8_t bits = temp.bits[(x + y * TILE_WIDTH) / 8];
+    for (size_t i = 0, n = buffer_count(&(tiles->buffer)); i < n; ++i)
+    {
+        tile_t* curr = buffer_get(&(tiles->buffer), i);
 
-			for (size_t i = 0; i < 8; ++i)
-			{
-				*curr++ = bits & (1 << (7 - i)) ? color : 0x00;
-			}
-		}
-	}
+        uint32_t hash = hash_tile(tiles, curr) & (TILES_HASH_SIZE-1);
+
+        tile_index_t index = NO_TILE;
+        for (size_t j = 0; j < sizeof_array(tile_variants); ++j)
+        {
+            uint32_t flags = tile_variants[j];
+
+            tile_t temp = *curr;
+            if (flags & TILE_FLIP_X)
+                temp = tile_flip_x(&temp);
+            if (flags & TILE_FLIP_Y)
+                temp = tile_flip_y(&temp);
+            if (flags & TILE_INVERT)
+                temp = tile_invert(&temp);
+
+            index = tiles->hash[hash];
+            while (index != NO_TILE)
+            {
+                const tile_t* candidate = buffer_get(&(tiles->buffer), index);
+
+                if (index == j)
+                {
+                    index = candidate->next;
+                    continue;
+                }
+
+                if (!tile_match(tiles, &temp, candidate))
+                    break;
+
+                index = candidate->next;
+            }
+
+            if (index != NO_TILE)
+            {
+                index = index|flags;
+                break;
+            }
+        }
+
+        if (index != NO_TILE)
+        {
+            curr->remap = index;
+            curr->count = 0;
+            curr->next = NO_TILE;
+            removed++;
+        }
+        else
+        {
+            curr->remap = NO_TILE;
+            curr->next = tiles->hash[hash];
+            tiles->hash[hash] = i;
+        }
+
+        fprintf(stderr, "\rdeduping tiles: %lu/%lu (%lu removed)", i+1, n, removed);
+    }
+
+    fprintf(stderr, "\n");
 }
 
-// TODO: allow for permutations
-uint32_t tiles_compare(tiles_t* tiles, uint32_t local, uint32_t search, uint32_t* actual_error, uint32_t* actual_permutation)
+void tiles_rebuild(tiles_t* tiles, tile_index_t* remaps)
 {
-	const tile_t* pattern = &(tiles->tiles[local]);
-	uint32_t candidate = TILE_NO_TILE;
-	uint32_t error = (uint32_t)~0UL;
-	uint32_t permutation = 0;
+    buffer_t old = tiles->buffer;
+    buffer_init(&(tiles->buffer), old.elemsize);
 
-	while (search != TILE_NO_TILE)
-	{
-		const tile_t* tile = &(tiles->tiles[search]);
-		if (local == search || tile->count == 0)
-		{
-			search = tile->next;
-			continue;
-		}
+    for (size_t i = 0; i < TILES_HASH_SIZE; ++i)
+    {
+        tiles->hash[i] = NO_TILE;
+    }
 
-		uint32_t curr_permutation;
-		uint32_t curr_error = tile_diff(&(pattern->data), &(tile->data), &curr_permutation);
-		if (curr_error <= error)
-		{
-			candidate = search;
-			error = curr_error;
-			permutation = curr_permutation;
-		}
+    for (size_t i = 0, n = buffer_count(&old); i < n; ++i)
+    {
+        tile_t* old_tile = (tile_t*)buffer_get(&old, i);
+        if (old_tile->count == 0)
+        {
+            remaps[i] = NO_TILE;
+            continue;
+        }
 
-		search = tile->next;
-	}
+        tile_t* new_tile = (tile_t*)buffer_alloc(&(tiles->buffer), 1);
 
-	*actual_error = error;
-	*actual_permutation = permutation;
-	return candidate;
+        uint32_t hash = hash_tile(tiles, old_tile) & (TILES_HASH_SIZE-1);
+        uint32_t offset = buffer_offset(&(tiles->buffer), new_tile);
+
+        memcpy(&(new_tile->indices), &(old_tile->indices), sizeof(new_tile->indices));
+        new_tile->count = old_tile->count;
+
+        new_tile->next = tiles->hash[hash];
+        tiles->hash[hash] = offset;
+
+        new_tile->remap = NO_TILE;
+        old_tile->remap = offset;
+
+        remaps[i] = offset;
+    }
+
+    for (size_t i = 0, n = buffer_count(&old); i < n; ++i)
+    {
+        const tile_t* old_tile = (const tile_t*)buffer_get(&old, i);
+        if (old_tile->count > 0)
+            continue;
+
+        uint32_t index = old_tile->remap & ~TILE_BITS_MASK;
+        uint32_t flags = old_tile->remap & TILE_BITS_MASK;
+
+        tile_t* target_tile = (tile_t*)buffer_get(&old, index);
+        remaps[i] = target_tile->remap | flags;
+    }
+
+    buffer_release(&old);
 }
-void tiles_destroy(tiles_t* tiles)
-{
-	if (tiles->tiles)
-		free(tiles->tiles);
 
-	free(tiles);
+void tile_render(uint8_t* target, const tiles_t* tiles, const tile_t* tile, uint32_t bits, uint32_t pitch)
+{
+    const block_index_t* indices = tile->indices;
+
+    for (size_t j = 0; j < TILE_HEIGHT; j += BLOCK_HEIGHT)
+    {
+        for (size_t i = 0; i < TILE_WIDTH; i += BLOCK_HEIGHT)
+        {
+            block_index_t index = *(indices++);
+            block_t block = blocks_get(&(tiles->blocks), index);
+            uint8_t* pixels = &target[i + j * pitch];
+
+            block_render(pixels, &block, pitch);
+        }
+    }
+}
+
+static uint32_t bi_compress(block_index_t index, size_t bits)
+{
+	uint32_t flags = (index & BLOCK_BITS_MASK) >> (32 - bits);
+
+	uint32_t in = index & ~BLOCK_BITS_MASK;
+	uint32_t out = index & (~0U >> (32-(bits-3)));
+    uint32_t result = out | flags;
+	return result;
+}
+
+static block_index_t bi_uncompress(uint32_t in, size_t bits)
+{
+    uint32_t flags = (in & (BLOCK_BITS_MASK >> (32 - bits))) << (32 - bits);
+    uint32_t out = in & (~BLOCK_BITS_MASK) >> (32 - bits);
+    uint32_t result = out | flags;
+    return result;
+}
+
+#define sizeof_member(type, member) sizeof(((type *)0)->member)
+static const size_t TILE_DATA_SIZE = sizeof_member(tile_t, indices);
+
+size_t tiles_load(const buffer_t* in, size_t offset, size_t count, tiles_t* tiles, size_t block_bits)
+{
+    for (size_t i = 0; i < TILES_HASH_SIZE; ++i)
+    {
+        tiles->hash[i] = NO_TILE;
+    }
+
+    for (size_t i = 0, n = count; i < n; ++i)
+    {
+        tile_t* tile = buffer_alloc(&(tiles->buffer), 1);
+
+        for (size_t j = 0; j < TILE_INDEX_COUNT; ++j)
+        {
+            if (block_bits > 16)
+            {
+                uint32_t temp;
+                const uint8_t* data = buffer_get(in, offset);
+
+                memcpy(&temp, data, sizeof(temp));
+                tile->indices[j] = temp;
+
+                offset += sizeof(temp);
+            }
+            else
+            {
+                uint16_t temp;
+                const uint8_t* data = buffer_get(in, offset);
+
+                memcpy(&temp, data, sizeof(temp));
+                tile->indices[j] = bi_uncompress(temp, 16);
+
+                offset += sizeof(temp);
+            }
+        }
+
+        uint32_t hash = hash_tile(tiles, tile) & (TILES_HASH_SIZE-1);
+
+        tile->next = tiles->hash[hash];
+        tiles->hash[hash] = i;
+
+        tile->count = 0;
+        tile->remap = NO_TILE;
+    }
+
+    return offset;
+}
+
+void tiles_save(buffer_t* out, const tiles_t* tiles, size_t block_bits)
+{
+	for (size_t i = 0, n = buffer_count(&(tiles->buffer)); i < n; ++i)
+	{
+		const tile_t* tile = buffer_get(&(tiles->buffer), i);
+        for (size_t j = 0; j < TILE_INDEX_COUNT; ++j)
+        {
+            block_index_t index = tile->indices[j];
+
+            if (block_bits > 16)
+            {
+                uint32_t* temp = ((uint32_t*)buffer_alloc(out, sizeof(uint32_t)));
+                *temp = index;
+            }
+            else
+            {
+                uint16_t* temp = ((uint16_t*)buffer_alloc(out, sizeof(uint16_t)));
+                *temp = bi_compress(index, 16);
+            }
+        }
+	}
 }

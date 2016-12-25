@@ -24,26 +24,24 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	const tiles_t* tiles = stream->tiles;
-	const frames_t* frames = stream->frames;
+	const tiles_t* tiles = &(stream->tiles);
+	const frames_t* frames = &(stream->frames);
 
-	for (size_t index = 0; index < frames->size; ++index)
+	for (size_t index = 0, n = buffer_count(&(frames->buffer)); index < n; ++index)
 	{
-		const frame_t* frame = &(frames->frames[index]);
-		const tile_index_t* indices = frame->tiles;
+		const frame_t* frame = (const frame_t*)buffer_get(&(frames->buffer), index);
 
 		size_t count = 0;
+        const tile_index_t* indices = frame->tiles;
 		for (size_t y = 0; y < FRAME_HEIGHT; y += TILE_HEIGHT)
 		{
 			for (size_t x = 0; x < FRAME_WIDTH; x += TILE_WIDTH)
 			{
+                tile_index_t ti = *(indices++);
+                const tile_t tile = tiles_get(tiles, ti);
 				uint8_t* target = &buffer[x + y * FRAME_WIDTH];
 
-				tile_index_t ti = *(indices++);
-				uint32_t offset = ti & ~TILE_BITS_MASK;
-
-				const tile_t* tile = &(tiles->tiles[offset]);
-				tile_render(target, &(tile->data), ti & TILE_BITS_MASK, FRAME_WIDTH);
+				tile_render(target, tiles, &tile, ti & TILE_BITS_MASK, FRAME_WIDTH);
 				++count;
 			}
 		}

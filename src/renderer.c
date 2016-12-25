@@ -5,7 +5,7 @@
 SDL_Window* window = NULL;
 SDL_Surface* buffer = NULL;
 
-#define DEBUG_COLORS
+//#define DEBUG_COLORS
 
 int renderer_create(uint32_t width, uint32_t height, uint32_t flags)
 {
