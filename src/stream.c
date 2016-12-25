@@ -99,7 +99,8 @@ int stream_save(const stream_t* stream, FILE* out)
 	header.blocks = buffer_count(&(stream->tiles.blocks.buffer));
 	header.tiles = buffer_count(&(stream->tiles.buffer));
 	header.frames = buffer_count(&(stream->frames.buffer));
-    header.data = stream_end;
+    header.size = buffer_count(&block_buffer) + buffer_count(&tile_buffer) + buffer_count(&frame_buffer);
+    header.compressed_size = stream_end;
     header.tile_bits = tile_bits;
     header.block_bits = block_bits;
 
@@ -165,19 +166,20 @@ int stream_load(stream_t* stream, FILE* in)
 	if (fread(&header, sizeof(header), 1, in) < 1)
 		return -1;
 
-    fprintf(stderr, "blocks: %u, tiles: %u, frames: %u, data: %u\ntile bits: %u, block bits: %u\n",
+    fprintf(stderr, "blocks: %u, tiles: %u, frames: %u, size: %u (%u)\ntile bits: %u, block bits: %u\n",
                     header.blocks,
                     header.tiles,
                     header.frames,
-                    header.data,
+                    header.size,
+                    header.compressed_size,
                     header.tile_bits,
                     header.block_bits);
 
     buffer_t inbuf;
     buffer_init(&inbuf, 1);
-    uint8_t* data = buffer_alloc(&inbuf, header.data);
+    uint8_t* data = buffer_alloc(&inbuf, header.compressed_size);
 
-    if (fread(data, header.data, 1, in) < 1)
+    if (fread(data, header.compressed_size, 1, in) < 1)
     {
         buffer_release(&inbuf);
     }
@@ -194,6 +196,15 @@ int stream_load(stream_t* stream, FILE* in)
         return -1;
     }
 
+    if (buffer_count(&temp) != header.size)
+    {
+        buffer_release(&temp);
+        buffer_release(&inbuf);
+
+        fprintf(stderr, "Decompressed buffer size mismatch\n");
+        return -1;
+    }
+
     size_t current = 0;
     current = blocks_load(&temp, current, header.blocks, &(stream->tiles.blocks));
     current = tiles_load(&temp, current, header.tiles, &(stream->tiles), header.block_bits);
@@ -201,6 +212,12 @@ int stream_load(stream_t* stream, FILE* in)
 
     buffer_release(&temp);
     buffer_release(&inbuf);
+
+    if (current != header.size)
+    {
+        fprintf(stderr, "Not all data in buffer consumed\n");
+        return -1;
+    }
 
 	return 0;
 }

@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 
 		fprintf(stderr, "\rframe: %lu tiles: %lu    ", index, count);
 
-		if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, buffer, 32) < 0)
+		if (renderer_update(FRAME_WIDTH, FRAME_HEIGHT, buffer, 16 * (2)) < 0)
 			return -1;
 	}
 
