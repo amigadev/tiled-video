@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <arpa/inet.h>
 
 stream_t* stream_create()
 {
@@ -28,7 +29,15 @@ uint8_t bits_needed(uint32_t value)
     return r;
 }
 
-// TODO: byteswap
+uint32_t u32be(uint32_t in)
+{
+    return htonl(in);
+}
+
+uint16_t u16be(uint16_t in)
+{
+    return htons(in);
+}
 
 static void compress_buffer(buffer_t* out, const buffer_t* in)
 {
@@ -96,13 +105,13 @@ int stream_save(const stream_t* stream, FILE* out)
 		buffer_count(&(stream->frames.buffer)), buffer_count(&frame_buffer), stream_end - frames_start);
 
 	stream_header_t header;
-	header.blocks = buffer_count(&(stream->tiles.blocks.buffer));
-	header.tiles = buffer_count(&(stream->tiles.buffer));
-	header.frames = buffer_count(&(stream->frames.buffer));
-    header.size = buffer_count(&block_buffer) + buffer_count(&tile_buffer) + buffer_count(&frame_buffer);
-    header.compressed_size = stream_end;
-    header.tile_bits = tile_bits;
-    header.block_bits = block_bits;
+	header.blocks = u32be(buffer_count(&(stream->tiles.blocks.buffer)));
+	header.tiles = u32be(buffer_count(&(stream->tiles.buffer)));
+	header.frames = u32be(buffer_count(&(stream->frames.buffer)));
+    header.size = u32be(buffer_count(&block_buffer) + buffer_count(&tile_buffer) + buffer_count(&frame_buffer));
+    header.compressed_size = u32be(stream_end);
+    header.tile_bits = u16be(tile_bits);
+    header.block_bits = u16be(block_bits);
 
     int ret = 0;
     do
@@ -165,6 +174,14 @@ int stream_load(stream_t* stream, FILE* in)
 	stream_header_t header;
 	if (fread(&header, sizeof(header), 1, in) < 1)
 		return -1;
+
+	header.blocks = u32be(header.blocks);
+	header.tiles = u32be(header.tiles);
+	header.frames = u32be(header.frames);
+	header.size = u32be(header.size);
+	header.compressed_size = u32be(header.compressed_size);
+	header.tile_bits = u16be(header.tile_bits);
+	header.block_bits = u16be(header.block_bits);
 
     fprintf(stderr, "blocks: %u, tiles: %u, frames: %u, size: %u (%u)\ntile bits: %u, block bits: %u\n",
                     header.blocks,

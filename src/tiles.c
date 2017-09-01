@@ -1,6 +1,8 @@
 #include "tiles.h"
 #include "blocks.h"
 
+#include "stream.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -407,7 +409,7 @@ size_t tiles_load(const buffer_t* in, size_t offset, size_t count, tiles_t* tile
                 const uint8_t* data = buffer_get(in, offset);
 
                 memcpy(&temp, data, sizeof(temp));
-                tile->indices[j] = temp;
+                tile->indices[j] = u32be(temp);
 
                 offset += sizeof(temp);
             }
@@ -417,7 +419,7 @@ size_t tiles_load(const buffer_t* in, size_t offset, size_t count, tiles_t* tile
                 const uint8_t* data = buffer_get(in, offset);
 
                 memcpy(&temp, data, sizeof(temp));
-                tile->indices[j] = bi_uncompress(temp, 16);
+                tile->indices[j] = bi_uncompress(u16be(temp), 16);
 
                 offset += sizeof(temp);
             }
@@ -447,12 +449,12 @@ void tiles_save(buffer_t* out, const tiles_t* tiles, size_t block_bits)
             if (block_bits > 16)
             {
                 uint32_t* temp = ((uint32_t*)buffer_alloc(out, sizeof(uint32_t)));
-                *temp = index;
+                *temp = u32be(index);
             }
             else
             {
                 uint16_t* temp = ((uint16_t*)buffer_alloc(out, sizeof(uint16_t)));
-                *temp = bi_compress(index, 16);
+                *temp = u16be(bi_compress(index, 16));
             }
         }
 	}

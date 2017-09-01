@@ -10,8 +10,6 @@
 #define TILE_WIDTH (16)
 #define TILE_HEIGHT (16)
 
-// TODO: 16-bit support
-
 typedef uint32_t tile_index_t;
 #define NO_TILE 0xffffffff
 #define TILE_FLIP_X 0x80000000

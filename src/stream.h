@@ -41,3 +41,7 @@ int stream_load(stream_t* stream, FILE* fp);
 void stream_optimize_blocks(stream_t* stream, size_t passes, size_t max_error);
 void stream_optimize_tiles(stream_t* stream, size_t max_error);
 void stream_optimize_frames(stream_t* stream);
+
+uint32_t u32be(uint32_t in);
+uint16_t u16be(uint16_t in);
+

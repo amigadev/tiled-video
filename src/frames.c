@@ -1,6 +1,8 @@
 #include "frames.h"
 #include "bits.h"
 
+#include "stream.h"
+
 #include <string.h>
 
 void frames_init(frames_t* frames)
@@ -49,6 +51,8 @@ size_t frames_load(const buffer_t* in, size_t offset, size_t count, frames_t* fr
         frame_header_t header;
         memcpy(&header, buffer_get(in, offset), sizeof(header));
         offset += sizeof(header);
+
+        header.size = u16be(header.size);
 
         bits_t fbits;
         bits_init_read(&fbits, buffer_get(in, offset), header.size);
@@ -156,7 +160,7 @@ void frames_save(buffer_t* out, const frames_t* frames, size_t tile_bits)
 		bits_flush(&fbits);
 
 		frame_header_t fheader;
-		fheader.size = fbits.buf.size;
+		fheader.size = u16be(fbits.buf.size);
 
 		buffer_add(out, &fheader, sizeof(frame_header_t));
 		buffer_add(out, fbits.buf.data, fbits.buf.size);
