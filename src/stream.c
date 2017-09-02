@@ -51,8 +51,8 @@ static void compress_buffer(buffer_t* out, const buffer_t* in)
         if (compressed_size < block_size)
         {
             stream_block_t block_header;
-            block_header.inlen = (block_size-1);
-            block_header.outlen = (compressed_size-1)|STREAM_BLOCK_COMPRESSED;
+            block_header.inlen = u16be(block_size-1);
+            block_header.outlen = u16be((compressed_size-1)|STREAM_BLOCK_COMPRESSED);
 
             buffer_add(out, &block_header, sizeof(block_header));
             buffer_add(out, tempbuf, compressed_size);
@@ -60,8 +60,8 @@ static void compress_buffer(buffer_t* out, const buffer_t* in)
         else
         {
             stream_block_t block_header;
-            block_header.inlen = (block_size-1);
-            block_header.outlen = (block_size-1);
+            block_header.inlen = u16be(block_size-1);
+            block_header.outlen = u16be(block_size-1);
 
             buffer_add(out, &block_header, sizeof(block_header));
             buffer_add(out, buffer_get(in, offset), block_size);
@@ -144,6 +144,8 @@ static int decompress_buffer(buffer_t* out, const buffer_t* in)
         stream_block_t block_header;
 
         memcpy(&block_header, buffer_get(in, offset), sizeof(block_header));
+        block_header.inlen = u16be(block_header.inlen);
+        block_header.outlen = u16be(block_header.outlen);
         offset += sizeof(block_header);
 
         size_t insize = (block_header.outlen & ~STREAM_BLOCK_COMPRESSED) + 1;
