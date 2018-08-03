@@ -1,13 +1,13 @@
 CCFLAGS=-I/usr/local/include -O2 -DNDEBUG
 LDFLAGS=-L/usr/local/lib -lSDL2
 
-all: out converter player
+all: out converter player dump
 
 out:
 	mkdir out
 
 clean:
-	rm -rf out converter player
+	rm -rf out converter player dump
 
 out/%.o: src/%.c
 	$(CC) -c -o $@ $(CCFLAGS) $<
@@ -15,11 +15,15 @@ out/%.o: src/%.c
 converter: out/converter.o out/renderer.o out/tiles.o out/stream.o out/frames.o out/buffer.o out/bits.o out/blocks.o out/fastlz.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
+dump: out/dump.o out/tiles.o out/stream.o out/frames.o out/buffer.o out/bits.o out/blocks.o out/fastlz.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+
 player: out/player.o out/renderer.o out/tiles.o out/stream.o out/frames.o out/buffer.o out/bits.o out/blocks.o out/fastlz.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 out/converter.o: src/converter.c src/renderer.h src/stream.h src/frames.h src/tiles.h src/bits.h src/blocks.h
 out/player.o: src/player.c src/renderer.h src/stream.h src/frames.h src/tiles.h src/blocks.h
+out/dump.o: src/dump.c src/stream.h
 out/renderer.o: src/renderer.c src/renderer.h
 out/tiles.o: src/tiles.c src/tiles.h src/blocks.h
 out/stream.o: src/stream.c src/stream.h src/frames.h src/tiles.h src/buffer.h src/bits.h

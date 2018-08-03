@@ -241,6 +241,126 @@ int stream_load(stream_t* stream, FILE* in)
 	return 0;
 }
 
+int stream_dump(FILE* in, const char* basename)
+{
+	stream_header_t header;
+	if (fread(&header, sizeof(header), 1, in) < 1)
+		return -1;
+
+	header.blocks = u32be(header.blocks);
+	header.tiles = u32be(header.tiles);
+	header.frames = u32be(header.frames);
+	header.size = u32be(header.size);
+	header.compressed_size = u32be(header.compressed_size);
+	header.tile_bits = u16be(header.tile_bits);
+	header.block_bits = u16be(header.block_bits);
+
+    fprintf(stderr, "blocks: %u, tiles: %u, frames: %u, size: %u (%u)\ntile bits: %u, block bits: %u\n",
+                    header.blocks,
+                    header.tiles,
+                    header.frames,
+                    header.size,
+                    header.compressed_size,
+                    header.tile_bits,
+                    header.block_bits);
+
+    buffer_t inbuf;
+    buffer_init(&inbuf, 1);
+    uint8_t* data = buffer_alloc(&inbuf, header.compressed_size);
+
+    if (fread(data, header.compressed_size, 1, in) < 1)
+    {
+        buffer_release(&inbuf);
+    }
+
+    buffer_t temp;
+    buffer_init(&temp, 1);
+
+    if (decompress_buffer(&temp, &inbuf) < 0)
+    {
+        buffer_release(&temp);
+        buffer_release(&inbuf);
+
+        fprintf(stderr, "Failed to decompress buffer\n");
+        return -1;
+    }
+
+    if (buffer_count(&temp) != header.size)
+    {
+        buffer_release(&temp);
+        buffer_release(&inbuf);
+
+        fprintf(stderr, "Decompressed buffer size mismatch\n");
+        return -1;
+    }
+
+    size_t offset = 0;
+    {
+        char namebuf[512];
+        sprintf(namebuf, "%s.blocks", basename);
+        size_t block_size = (BLOCK_WIDTH / 8) * BLOCK_HEIGHT;
+
+        FILE* out = fopen(namebuf, "wb");
+        fwrite(temp.data + offset, block_size, header.blocks, out);
+
+        fclose(out);
+
+        fprintf(stderr, "written blocks to %s (%lu bytes)\n", namebuf, block_size * header.blocks);
+
+        offset += block_size * header.blocks;
+    }
+
+    {
+        char namebuf[512];
+        sprintf(namebuf, "%s.tiles", basename);
+        size_t tile_size = (header.block_bits > 16 ? sizeof(uint32_t) : sizeof(uint16_t)) * TILE_INDEX_COUNT;
+
+        FILE* out = fopen(namebuf, "wb");
+        fwrite(temp.data + offset, tile_size, header.tiles, out);
+
+        fclose(out);
+
+        fprintf(stderr, "written tiles to %s (%lu bytes)\n", namebuf, tile_size * header.tiles);
+
+        offset += tile_size * header.tiles;
+    }
+
+    {
+        char namebuf[512];
+        sprintf(namebuf, "%s.frames", basename);
+
+        FILE* out = fopen(namebuf, "wb");
+        fwrite(temp.data + offset, temp.size - offset, 1, out);
+
+        fprintf(stderr, "written frames to %s (%lu bytes)\n", namebuf, temp.size - offset);
+
+        fclose(out);
+    }
+
+    {
+        char namebuf[512];
+        sprintf(namebuf, "%s.asm", basename);
+
+        FILE* out = fopen(namebuf, "w");
+
+        fprintf(out, "anim_blocks       equ     %u\n", header.blocks);
+        fprintf(out, "anim_tiles        equ     %u\n", header.tiles);
+        fprintf(out, "anim_frames       equ     %u\n", header.frames);
+        fprintf(out, "anim_tile_bits    equ     %u\n", header.tile_bits);
+        fprintf(out, "anim_block_bits   equ     %u\n", header.block_bits);
+
+        fprintf(stderr, "written header to %s\n", namebuf);
+
+        fclose(out);
+    }
+
+
+    buffer_release(&temp);
+    buffer_release(&inbuf);
+
+	return 0;
+}
+
 void stream_destroy(stream_t* stream)
 {
 	frames_release(&(stream->frames));
