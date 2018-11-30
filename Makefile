@@ -1,5 +1,5 @@
 CCFLAGS=-I/usr/local/include -O2 -DNDEBUG
-LDFLAGS=-L/usr/local/lib -lSDL2
+LDFLAGS=-L/usr/local/lib -lSDL2 -lm
 
 all: out converter player dump
 
