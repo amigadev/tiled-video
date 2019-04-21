@@ -32,5 +32,3 @@ void frames_remap_tiles(frames_t* frames, const tile_index_t* remaps);
 
 size_t frames_load(const buffer_t* in, size_t offset, size_t count, frames_t* frames, size_t tile_bits);
 void frames_save(buffer_t* out, const frames_t* frames, size_t tile_bits);
-
-

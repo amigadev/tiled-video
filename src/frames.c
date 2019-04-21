@@ -58,6 +58,8 @@ size_t frames_load(const buffer_t* in, size_t offset, size_t count, frames_t* fr
         bits_init_read(&fbits, buffer_get(in, offset), header.size);
         offset += header.size;
 
+        fprintf(stderr, "Loading frame %ld, %d bytes (%d bits per tile index)\n", i, header.size, tile_bits);
+
         for (size_t j = 0; j < FRAME_TILE_COUNT;)
         {
             uint8_t header = bits_read(&fbits, 8);

@@ -71,6 +71,14 @@ static void compress_buffer(buffer_t* out, const buffer_t* in)
     }
 }
 
+static void write_buffer(const char* filename, const buffer_t* in)
+{
+	FILE* out = fopen(filename, "wb");
+	fwrite(buffer_get(in, 0), 1, buffer_count(in), out);
+	fclose(out);
+}
+
+
 int stream_save(const stream_t* stream, FILE* out)
 {
 	buffer_t outbuf;
@@ -92,11 +100,14 @@ int stream_save(const stream_t* stream, FILE* out)
 	frames_save(&frame_buffer, &(stream->frames), tile_bits);
 
 	size_t blocks_start = buffer_count(&outbuf);
-    compress_buffer(&outbuf, &block_buffer);
+        write_buffer("anim.blocks", &block_buffer);
+    	compress_buffer(&outbuf, &block_buffer);
 	size_t tiles_start = buffer_count(&outbuf);
-    compress_buffer(&outbuf, &tile_buffer);
+    	write_buffer("anim.tiles", &tile_buffer);
+	compress_buffer(&outbuf, &tile_buffer);
 	size_t frames_start = buffer_count(&outbuf);
-    compress_buffer(&outbuf, &frame_buffer);
+    	write_buffer("anim.frames", &frame_buffer);
+	compress_buffer(&outbuf, &frame_buffer);
 	size_t stream_end = buffer_count(&outbuf);
 
 	fprintf(stderr, "blocks: %lu, (%lu -> %lu bytes)\ntiles: %lu (%lu -> %lu bytes)\nframes: %lu (%lu -> %lu bytes)\n",
